@@ -1,4 +1,4 @@
-function [PAC,areaK,deltaK] = consensusSelection_v3(cMat,varargin)
+function [PAC,areaK,deltaK] = consensusSelection(cMat,varargin)
 % [PAC,areaK,deltaK] = consensusSelection(cMat,kRange,varargin)
 % ------------------------------------------------------------------------
 % Select a good clustering solution based on consensus across many
