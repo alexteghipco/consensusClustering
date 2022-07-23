@@ -1,4 +1,4 @@
-function [clusterConsensus,itemTracker,clusterTracker,exemplarTracker] = consensusClustering_v4(inData,nPerms,pItem,kRange,cAlgo,distance,neighbor_num,maxIter,maxReps,center,scale)
+function [clusterConsensus,itemTracker,clusterTracker,exemplarTracker] = consensusClustering(inData,nPerms,pItem,kRange,cAlgo,distance,neighbor_num,maxIter,maxReps,center,scale)
 
 if isempty(pItem)
     pItem = 0.8;
