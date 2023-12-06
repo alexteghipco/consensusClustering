@@ -12,3 +12,5 @@ This code and the methods were generated for: Teghipco, A., Kundu, P., Buchsbaum
 This repository was refined for clustering CNN saliency maps in the below preprint. To replicate our analyses, ignore the group-level adjustment of subject-level solutions as it does not apply. Restrict the PAC curve for model selection based on dip statistic p-values. Select other parameters based on the values reported in our supplemental material: Teghipco, A., Newman-Norlund, R., Fridriksson, J., Rorden, C., & Bonilha, L. (2023). Distinct brain morphometry patterns revealed by deep learning improve prediction of aphasia severity. Research Square.
 
 Better documentation and debugging is forthcoming. Send any questions/comments to: alex.teghipco@sc.edu
+
+Make sure to add all directories to your path, these contain clustering algorithms and other code consensusClustering draws on (and other goodies we will document in a forthcoming update).
