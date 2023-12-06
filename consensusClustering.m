@@ -1,5 +1,76 @@
-function [clusterConsensus,itemTracker,clusterTracker,exemplarTracker] = consensusClustering(inData,nPerms,pItem,kRange,cAlgo,distance,neighbor_num,maxIter,maxReps,center,scale)
+function [clusterConsensus,itemTracker,clusterTracker,exemplarTracker, alignedC] = consensusClustering(inData,nPerms,pItem,kRange,cAlgo,distance,neighbor_num,maxIter,maxReps,center,scale,verbose)
+% Perform consensus clustering using a variety of clustering algorithms.
+% Please ensure the algorithm of your choice (as contained in this package
+% is in your matlab path)
+%
+% Inputs ---------------------------------------------------
+% inData: a matrix of n samples by p features to cluster (we are clustering
+%   samples)
+% nPerms: number of subsamples to draw from inData and cluster to generate
+%   the co-association or consensus matrix. (default: 7500)
+% pItem: proportion of samples you want to subsample (default: 0.8)
+% kRange: a vector of classes you want in each independently constructed
+%   solution. For example: [2:10] will produce 9 consensus matrices for
+%   solutions containing between 2 and 10 clusters.
+% cAlgo: clustering algorithm. Options are:
+%   'spectral': self-supervised spectral clustering
+%    'mod': Louvain clustering (modularity based)
+%    'affinitypropagation': affinity propgataion (information-theory
+%    based). Note we will use a version of AP that seeks a solution with a
+%    specific k. Change first few lines of code to not do this but you
+%    might break things. 
+%    'PAM': k-medoids using the PAM algorithm
+%    'kmeans': k-means++ clustering (if eta2 is used we will draw on a
+%    bespoke version of k-means instead of matlab default)
+%   (default: 'affinitypropagation')
+% distance: distance metric to use. Options are:
+%   'r': Pearson correlation coefficient
+%   'eta': Cohen et al's eta squared measure of similarity for whole brain
+%       connectivity maps
+%   'seuclidean': euclidean distance
+%   'squaredeuclidean': squared euclidean distances
+%   'cosine': cosine distance
+%   'raw': use a precomputed distance matrix (i.e., inData is actually n x
+%    n instead of n x p. (default: 'euclidean'). NOTE, this will *NOT* work
+%    for k-means or k-medoids.
+% 'neighbor_num': number of neighbors for spectral clustering. Default: 100 
+% 'maxIter': maximum iterations of clustering algorithm (applies to all)
+%   (default: 10000)
+% 'maxReps': maximum replicates of clustering algorithm (applies to k-means
+%   and PAM) (default: 15)
+% 'center': set to true to center input matrix inData
+% 'scale': set to true to scale input matrix inData
+% 'verbose': set to 'true' or 'false'; or '100' for every 100
+%
+% Outputs --------------------------------------------
+% clusterConsensus: consensus matrix of n x n x s where s is each solution
+%   specified by kRange
+% itemTracker: n x n matrix showing proportion of times a pair of samples were subsampled together 
+% clusterTracker: n x n matrix showing proportion of times a apair of
+%   samples were placed in the same cluster
+% exemplarTracker: n x s matrix showing number of times a sample was chosen
+%   as an examplar for a cluster
+% alignedC: aligned cluster identities across all solutions and for each
+% subsample (i.e., n x k x subsample).
+%
+%
+% Important -------------------------------------------
+% 1) Do not use a precomputed matrix with an algorithm that does not
+% support it! 
+% 2) For affinity propagation we search for k. This is inefficient and you
+% may need to increase damping factor, and tune some parameters if you are
+% seeing warnings
+% 3) Both affinity propagation and Louvain clustering do not technically
+% require an a priori defined k. This can make consensus clustering less
+% straightforward. Also, note affinity propagation used in this way has not
+% beed debugged.
+% 4) Technically, you should be able to use adaptive AP with a fixed k but
+% in my experience this has not worked very well (the adaptive AP package
+% was not really built with this in mind). 
 
+% Missing; kmeans_v2.m
+
+alignedC = [];
 if isempty(pItem)
     pItem = 0.8;
 end
@@ -25,19 +96,25 @@ if isempty(maxReps)
     maxReps = 15;
 end
 if isempty(center)
-    center = 'true';
+    center = 'false';
 end
 if isempty(scale)
-    scale = 'true';
+    scale = 'false';
 end
-verbose = '100'; % or 'false'; or '100' for every 100
-scThresh = 0.2;
+if isempty(verbose)
+    verbose = 'true'; % or 'false'; or '100' for every 100
+end
+
+% add to path
+fp = which('consensusClustering');
+[fp,~,~] = fileparts(fp);
+addpath(genpath(tmp1))
 
 % make sure rng is truly random
-rng('default');
+rng('default')
 rng('shuffle');
-affinFixedK = 'false';
-affinAdapt = 'true';
+affinFixedK = 'true';
+affinAdapt = 'false';
 
 % get sample size
 itemsPerResample = round((size(inData,1))*pItem);
@@ -62,7 +139,14 @@ for j = 1:nPerms
     subIdx = randperm(size(inData,1),itemsPerResample);
     subIdxS = sort(subIdx);
     itemTracker(subIdxS,subIdxS) = itemTracker(subIdxS,subIdxS) + 1;
-    autoData = inData(subIdxS,:);
+    if strcmpi(distance,'raw')
+        if ~strcmpi(cAlgo)
+            autoData = inData(subIdxS,subIdxS);
+        end
+    else
+        autoData = inData(subIdxS,:);
+    end
+    
     % scale and center input data
     if strcmp(center,'true')
         autoData = autoData - repmat(mean(autoData),size(autoData,1),1);
@@ -70,6 +154,7 @@ for j = 1:nPerms
     if strcmp(scale,'true')
         autoData = autoData/max(max(abs(autoData)));
     end
+    
     % distance measure
     switch cAlgo
         case {'spectral';'mod';'affinitypropagation'}
@@ -131,7 +216,6 @@ for j = 1:nPerms
                  pstep = 0.01;   % decreasing step of preferences: pstep*pmedian, default 0.01
                  lam = 0.5;      % damping factor, default 0.5
                  cut = 1;        % after clustering, drop an cluster with number of samples < cut
-                 %splot = 'plot'; % observing a clustering process when it is on
                  splot = 'noplot';
                  simatrix = 1;
                  
@@ -146,15 +230,24 @@ for j = 1:nPerms
                      %clusterTracker(subIdxS(idx2),subIdxS(idx2),i) = clusterTracker(subIdxS(idx2),subIdxS(idx2),i) + 1;
                  end
              elseif strcmp(affinFixedK,'true') && strcmp(affinAdapt,'false')
+                 parfor z = 1:length(kRange)
+                     [idx{z},~,~,~,~] = apclusterK(autoData,kRange(z),0,4000,400);
+                 end
                  for z = 1:length(kRange)
-                     [idx,netsim,dpsim,expref,pref] = apclusterK(autoData,k,0);
-                     idxU = unique(idx);
+                     idxU = unique(idx{z});
                      for l = 1:length(idxU)
-                         cluster(:,z) = find(idx == idxU(l));
+                         tmp = find(idx{z} == idxU(l));
+                         clusters(tmp,z) = l;
                      end
                  end
+                 %align clusters
+                 for z = 1:length(kRange)
+                     kkeep(:,j,z) = clusters;
+                     kkeepR(:,j,z) = idx{z};
+                     idxU = unique(idx{z});
+                     exemplarTracker(idxU,z) = exemplarTracker(idxU,z)+1;
+                 end
              end
-             
      end
     
      switch cAlgo
@@ -174,7 +267,7 @@ for j = 1:nPerms
                      end
                  case {'eta'}
                      for z = 1:length(kRange)
-                         clusters(:,z) = kmeans_v2(autoData,kRange(z),'MaxIter',maxIter,'Distance','correlation','Replicates',maxReps); % was 100
+                         clusters(:,z) = kmeans_v2(autoData,kRange(z),'MaxIter',maxIter,'Distance','correlation','Replicates',maxReps,'Options',statset('UseParallel',1)); % was 100
                      end
              end
          case {'PAM'}
@@ -186,7 +279,7 @@ for j = 1:nPerms
                      end
                  case {'eta'}
                      for z = 1:length(kRange)
-                         clusters(:,z) = kmedoids(autoData,kRange(z),'options',opts,'Distance',@etaSquared2,'Replicates',maxReps,'Algorithm','pam');
+                         clusters(:,z) = kmedoids(autoData,kRange(z),'options',opts,'Distance',@etaSquared2_fast,'Replicates',maxReps,'Algorithm','pam');
                      end
              end
      end
@@ -202,34 +295,36 @@ for j = 1:nPerms
                 end
             end
             clear clusters
-        case {'kmeans';'PAM';'spectral'}
+        case {'kmeans';'PAM';'spectral';'affinitypropagation'}
             for i = 1:size(clusters,2) % for each solution
-                for m = 1:kRange(i)
-                    id = find(clusters(:,i) == m);
+                mtmp = clusters(:,i);
+                for m = 1:max(mtmp)
+                    id = find(mtmp == m);
                     clusterTracker(subIdxS(id),subIdxS(id),i) = clusterTracker(subIdxS(id),subIdxS(id),i) + 1;
                 end
             end
             clear clusters
-        case {'affinitypropagation'}
-            
     end
 end
 
 switch cAlgo
     case {'mod'}
         for i = 1:size(clusterTracker,3)
-            clusterConsensus(:,:,1) = clusterTracker(:,:,1)./itemTracker(:,:,1);
+            clusterConsensus(:,:,i) = clusterTracker(:,:,1)./itemTracker(:,:,1);
         end
-        clusterTracker = clusterTracker(:,:,1);
+        clusterTracker = clusterTracker(:,:,i);
         itemTracker = itemTracker(:,:,1);
         
-    case {'kmeans'; 'PAM'; 'spectral'}
+    case {'kmeans'; 'PAM'; 'spectral'; 'affinitypropagation'}
         for i = 1:size(clusterTracker,3)
             clusterConsensus(:,:,i) = clusterTracker(:,:,i)./itemTracker(:,:,1);
+        end        
+        if strcmpi(cAlgo,'affinitypropagation')
+            exemplarTracker = exemplarTracker./nPerms;
+            for j = 1:length(kRange)
+                alignedC(:,:,j) = clusterAlignment(kkeep(:,:,j)','sortClusters','false','renameClusters','false','alignOnly','false')';
+            end
         end
-    case {'affinitypropagation'}
-        
-        
 end
 
 
